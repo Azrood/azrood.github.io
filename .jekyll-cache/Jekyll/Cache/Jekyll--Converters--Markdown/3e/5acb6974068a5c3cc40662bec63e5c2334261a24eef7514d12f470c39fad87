@@ -1,0 +1,17 @@
+I"½<h1 id="main-points">Main points:</h1>
+<ul>
+  <li><a href="https://jwt.io/">JWT</a></li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>[Writeup#Priv Esc</td>
+          <td>Docker escape](/assets/Boxes/Notebook/Writeup%23Priv%20Esc%7CDocker%20escape)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><a href="https://www.openwall.com/lists/oss-security/2019/02/13/3">CVE-2019-5736</a></li>
+  <li>/var/backups</li>
+</ul>
+:ET

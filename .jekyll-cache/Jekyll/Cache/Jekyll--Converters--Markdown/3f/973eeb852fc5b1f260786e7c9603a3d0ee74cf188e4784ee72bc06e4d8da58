@@ -1,0 +1,13 @@
+I"Þ<h1 id="main-points">Main points</h1>
+<ul>
+  <li>vhosts with gobuster</li>
+  <li>XSS to steal teacher cookie</li>
+  <li>Moodle RCE ver3.9 CVE-2020-14321
+    <h1 id="enumeration">Enumeration</h1>
+    <p>We start with nmap scan</p>
+  </li>
+  <li>22/tcp    open     ssh     syn-ack     OpenSSH 7.9 (FreeBSD 20200214; protocol 2.0)</li>
+  <li>80/tcp    open     http    syn-ack     Apache httpd 2.4.46 ((FreeBSD) PHP/7.4.15)</li>
+  <li>33060/tcp open     mysqlx? syn-ack</li>
+</ul>
+:ET

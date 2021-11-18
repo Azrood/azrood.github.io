@@ -1,0 +1,37 @@
+I"ú<h1 id="main-points">Main points</h1>
+<ul>
+  <li>wpscan to scan for wordpress vulnerabilities</li>
+  <li>LFI to RCE <a href="/assets/%23%5Ec022f4%7Cproc/self/fd/%7Bnumber%7D">{number}</a></li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>apache2 available site default [#^2e667f</td>
+          <td>conf path](/assets/%23%5E2e667f%7C%20conf%20path)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>Cacti [#^150e6a</td>
+          <td>SQLi](/assets/%23%5E150e6a%7CSQLi)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>grep on user and on processes <code class="language-plaintext highlighter-rouge">ps -aux</code> <code class="language-plaintext highlighter-rouge">netstat -antup</code></li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>docker escape [#^3839ca</td>
+          <td>sys_module capability](/assets/%23%5E3839ca%7Csys_module%20capability)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+:ET

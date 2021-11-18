@@ -1,0 +1,11 @@
+I"<h1 id="main-points">Main points</h1>
+<ul>
+  <li>DNS query: <code class="language-plaintext highlighter-rouge">dig</code></li>
+  <li>DNS <a href="https://www.cloudflare.com/learning/dns/dns-records/">Overview</a></li>
+  <li>encode a payload in base64 and pipe to bash for RCE</li>
+  <li>SSH can restrict access from a specific DNS zone <code class="language-plaintext highlighter-rouge">*.infra.dyna.htb</code></li>
+  <li><code class="language-plaintext highlighter-rouge">command *</code>  can be injected for command or parameter with filename</li>
+  <li><code class="language-plaintext highlighter-rouge">chmod +s</code> to set setuid bit to file, it can be elevated to owner/group</li>
+  <li><code class="language-plaintext highlighter-rouge">bash -p</code> to run bash privileged</li>
+</ul>
+:ET

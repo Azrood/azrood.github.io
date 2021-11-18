@@ -1,3 +1,8 @@
+---
+title: "[HTB] Intelligence - Walkthrough"
+layout: post
+tags: HTB
+---
 # Main points
 * [krbrelayx](https://github.com/dirkjanm/krbrelayx) for [unconstrained delegation](https://adsecurity.org/?p=1667) (AD stuff) [More info in his blog](https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/)
 * 

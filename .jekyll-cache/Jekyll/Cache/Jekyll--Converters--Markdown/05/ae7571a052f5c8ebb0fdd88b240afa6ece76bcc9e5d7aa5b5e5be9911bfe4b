@@ -1,0 +1,116 @@
+I"�<h1 id="main-points">Main points:</h1>
+<ul>
+  <li><a href="https://jwt.io/">JWT</a></li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>[Writeup#Priv Esc</td>
+          <td>Docker escape](/assets/Boxes/Notebook/Writeup%23Priv%20Esc%7CDocker%20escape)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><a href="https://www.openwall.com/lists/oss-security/2019/02/13/3">CVE-2019-5736</a></li>
+  <li>/var/backups</li>
+</ul>
+
+<h1 id="writeup">Writeup</h1>
+<p>We have these open ports:</p>
+
+<ul>
+  <li>22/tcp open  ssh     syn-ack OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)</li>
+  <li>80/tcp open  http    syn-ack nginx 1.14.0 (Ubuntu)</li>
+</ul>
+
+<p>We see there is a login page, we can register by going to the /register page
+we create <code class="language-plaintext highlighter-rouge">user: user</code>
+Let’s look at the request in burp suite:
+<img src="/assets/Pasted%20image%2020210709201119.png%7C1000" alt="Pasted image 20210709201119.png|1000" />
+The <code class="language-plaintext highlighter-rouge">auth</code> cookie is a JWT, let’s look at it
+<img src="/assets/Pasted%20image%2020210709201439.png" alt="Pasted image 20210709201439.png" /></p>
+
+<p>If we want to forge a new JWT with <code class="language-plaintext highlighter-rouge">admin_cap</code> set to <code class="language-plaintext highlighter-rouge">1</code> we need to private key, or we can use our own private key and replace the URL in the <code class="language-plaintext highlighter-rouge">kid</code> field.</p>
+
+<p>Let’s generate a private key with openssl
+<code class="language-plaintext highlighter-rouge">openssl genrsa -out key.pem 2048</code>
+We copy our private key to https://jwt.io to forge a new JWT, and we change the kid to point to our URL (don’t forget to setup a Python HTTP server) and set <code class="language-plaintext highlighter-rouge">admin_cap</code> to <code class="language-plaintext highlighter-rouge">1</code></p>
+
+<p><img src="/assets/Pasted%20image%2020210709201933.png" alt="Pasted image 20210709201933.png" /></p>
+
+<p>We copy the new token and replace it in the burp request and go to /admin page.</p>
+
+<p>There, we see 2 buttons. 
+<img src="/assets/Pasted%20image%2020210709202422.png" alt="Pasted image 20210709202422.png" /></p>
+
+<p>Our new JWT works, let’s replace it in the cookie tab of our browser so we dont have to replace it every time we make a request
+<img src="/assets/Pasted%20image%2020210709203845.png" alt="Pasted image 20210709203845.png" /></p>
+
+<p>Let’s upload a php webshell, and setup a netcat listener in our machine.</p>
+
+<p>After uploading our php webshell, we can query it to catch a shell
+<img src="/assets/Pasted%20image%2020210709202851.png" alt="Pasted image 20210709202851.png" /></p>
+
+<p>Now we have a shell
+<img src="/assets/Pasted%20image%2020210709202950.png" alt="Pasted image 20210709202950.png" /></p>
+
+<p>We see there is a user <code class="language-plaintext highlighter-rouge">noah</code>, we need to connect to it so we need the password.</p>
+
+<p>Let’s go back to the admin page and see if there are any notes.</p>
+
+<p><img src="/assets/Pasted%20image%2020210709203716.png" alt="Pasted image 20210709203716.png" />
+Interesting.</p>
+
+<p>Let’s check the 1st note:
+<img src="/assets/Pasted%20image%2020210709203922.png" alt="Pasted image 20210709203922.png" />
+Well, we already exploited that. Let’s continue.</p>
+
+<p><img src="/assets/Pasted%20image%2020210709204014.png" alt="Pasted image 20210709204014.png" />
+There are regular backups then, I thought it was related to a database, but then i saw a folder <code class="language-plaintext highlighter-rouge">backups</code> in <code class="language-plaintext highlighter-rouge">/var</code></p>
+
+<p><img src="/assets/Pasted%20image%2020210709204406.png" alt="Pasted image 20210709204406.png" /></p>
+
+<p>let’s download and unpack the <code class="language-plaintext highlighter-rouge">home.tar.gz</code>
+<img src="/assets/Pasted%20image%2020210709204535.png" alt="Pasted image 20210709204535.png" /></p>
+
+<p>We have a backup of the user noah
+<img src="/assets/Pasted%20image%2020210709204653.png" alt="Pasted image 20210709204653.png" /></p>
+
+<p>We have noah private key, we can use it to connect to ssh.
+<img src="/assets/Pasted%20image%2020210709204737.png" alt="Pasted image 20210709204737.png" /></p>
+
+<p>We have ssh access, and we get the user flag
+<img src="/assets/Pasted%20image%2020210709204827.png" alt="Pasted image 20210709204827.png" /></p>
+
+<h2 id="priv-esc">Priv Esc</h2>
+<p>When listing with <code class="language-plaintext highlighter-rouge">sudo -l</code> what we can run as sudo, we find 
+<img src="/assets/Pasted%20image%2020210709204949.png" alt="Pasted image 20210709204949.png" /></p>
+
+<p>So we can run docker as root, we need a docker escape to get root in the system.
+We check the version to look for a possible exploit
+<img src="/assets/Pasted%20image%2020210709205043.png" alt="Pasted image 20210709205043.png" /></p>
+
+<p>We find this <a href="https://github.com/Frichetten/CVE-2019-5736-PoC">Go implementation of PoC for CVE for Docker escape</a></p>
+
+<p>We download the file
+change the payload to get a root reverse shell
+<img src="/assets/Pasted%20image%2020210709211243.png" alt="Pasted image 20210709211243.png" />
+and compile it</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go build main.go 
+</code></pre></div></div>
+<p>and upload the <code class="language-plaintext highlighter-rouge">main</code> file</p>
+
+<p>chmod and execute the <code class="language-plaintext highlighter-rouge">main</code> file while running docker exec with sudo</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>sudo /usr/bin/docker exec -it webapp-dev01 /bin/sh
+</code></pre></div></div>
+<h3 id="you-need-to-run-the-exploit-inside-the-docker-container">You need to run the exploit inside the docker container</h3>
+<p><img src="/assets/Pasted%20image%2020210709221024.png" alt="Pasted image 20210709221024.png" /></p>
+
+<p>In another ssh session, run the docker command again 
+<img src="/assets/Pasted%20image%2020210709221045.png" alt="Pasted image 20210709221045.png" /></p>
+
+<p>and you get a shell in your netcat listener (repeat a few times because it’s unstable)
+<img src="/assets/Pasted%20image%2020210709221127.png" alt="Pasted image 20210709221127.png" /></p>
+<h2 id="root-hash">root hash</h2>
+<p>$6$OZ7vREXE$yXjcCfK6rhgAfN5oLisMiB8rE/uoZb7hSqTOYCUTF8lNPXgEiHi7zduz1mrTWtFnhKOCZA9XZu12osORyYnKF.</p>
+:ET

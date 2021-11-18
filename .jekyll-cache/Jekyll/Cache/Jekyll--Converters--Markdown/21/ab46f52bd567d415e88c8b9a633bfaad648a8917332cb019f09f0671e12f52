@@ -1,0 +1,18 @@
+I"“<h1 id="main-points">Main points</h1>
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>nginx and tomcat path traversal <code class="language-plaintext highlighter-rouge">/..;/</code> [#^57d812</td>
+          <td>tomcat apache 9.0.31](/assets/%23%5E57d812%7Ctomcat%20apache%209.0.31)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">copy_link</code> of ansible can copy the target folder/file <a href="/assets/%23%5E0349ed%7Csymlink%20whole%20folder">#^0349ed|symlink whole folder</a>
+    <h1 id="writeup">Writeup</h1>
+    <p>We start with basic nmap enumeration</p>
+  </li>
+</ul>
+:ET

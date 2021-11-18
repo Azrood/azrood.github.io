@@ -1,4 +1,8 @@
-
+---
+title: "[HTB] Armageddon - Walkthrough"
+layout: post
+tags: HTB
+---
 # Main points
 * [#^6b0a8d|dirty_sock vulnerability (snap)](#5E6b0a8d%7Cdirty_sock%20vulnerability%20%28snap%29)
 *  [#^dd1865|drupalgeddon2](#%5Edd1865%7Cdrupalgeddon2)

