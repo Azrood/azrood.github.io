@@ -31,11 +31,13 @@ fb_appid:
 # Collection setting
 collections:
   writeups:
+    permalink: /:collection/:title/
     output: true
     sort_by: date
     
 
   posts:
+    permalink: /blog/:title
     output: true
 
 # Markdown settings

